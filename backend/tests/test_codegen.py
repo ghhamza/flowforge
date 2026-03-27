@@ -65,6 +65,8 @@ def test_manual_to_http() -> None:
         "from airflow.providers.standard.operators.python import PythonOperator" in out
     )
     assert "urllib.request" in out
+    assert "ti.xcom_pull" in out
+    assert "go_m1" in out
     assert "task_m1 >> task_h1" in out
     assert "/api/orders" in out
 
@@ -115,7 +117,8 @@ def test_branch_two_downstream() -> None:
                 "type": "condition_branch",
                 "label": "Pick",
                 "position": {"x": 100, "y": 0},
-                "config": {"condition_code": "return 'task_h1'"},
+                # Downstream task_ids: label "A" -> a_h1, label "B" -> b_h2
+                "config": {"condition_code": "return 'a_h1'\n"},
             },
             {
                 "id": "h1",
@@ -152,7 +155,55 @@ def test_branch_two_downstream() -> None:
         in out
     )
     assert "BranchPythonOperator" in out
+    assert "ti.xcom_pull" in out
+    assert "manual_m1" in out
     assert "task_b1 >> [task_h1, task_h2]" in out
+
+
+def test_data_transform_codegen() -> None:
+    canvas = {
+        "nodes": [
+            {
+                "id": "m1",
+                "type": "manual_trigger",
+                "label": "M",
+                "position": {"x": 0, "y": 0},
+                "config": {},
+            },
+            {
+                "id": "h1",
+                "type": "http_request",
+                "label": "Fetch",
+                "position": {"x": 0, "y": 0},
+                "config": {
+                    "url": "/todos",
+                    "method": "GET",
+                    "headers": {},
+                },
+            },
+            {
+                "id": "t1",
+                "type": "data_transform",
+                "label": "Transform Data",
+                "position": {"x": 0, "y": 0},
+                "config": {
+                    "transform_code": "[{'title': item['title']} for item in result]",
+                },
+            },
+        ],
+        "edges": [
+            {"source": "m1", "target": "h1"},
+            {"source": "h1", "target": "t1"},
+        ],
+    }
+    out = generate_dag(WF_ID, "TF", canvas)
+    assert "def _ff_transform_t1" in out
+    assert "ti.xcom_pull" in out
+    assert "fetch_h1" in out
+    assert "transformed = [{'title': item['title']} for item in result]" in out
+    assert "json.dumps(transformed, indent=2)" in out
+    assert "return json.dumps(transformed)" in out
+    assert "task_h1 >> task_t1" in out
 
 
 def test_python_script_wraps_code() -> None:
@@ -181,6 +232,8 @@ def test_python_script_wraps_code() -> None:
     )
     assert "PythonOperator" in out
     assert "def _ff_python_p1" in out
+    assert "ti.xcom_pull" in out
+    assert "m_m1" in out
     assert "return x" in out
 
 
@@ -229,12 +282,24 @@ def test_generated_dag_is_valid_python_http_plus_branch() -> None:
                 "type": "condition_branch",
                 "label": "Condition Branch",
                 "position": {"x": 0, "y": 0},
-                "config": {"condition_code": "return task_id"},
+                "config": {"condition_code": "return 'tail_h2'\n"},
+            },
+            {
+                "id": "h2",
+                "type": "http_request",
+                "label": "Tail",
+                "position": {"x": 0, "y": 0},
+                "config": {
+                    "url": "/x",
+                    "method": "GET",
+                    "headers": {},
+                },
             },
         ],
         "edges": [
             {"source": "c1", "target": "h1"},
             {"source": "h1", "target": "b1"},
+            {"source": "b1", "target": "h2"},
         ],
     }
     out = generate_dag(WF_ID, "test", canvas)

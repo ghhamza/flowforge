@@ -3,6 +3,8 @@
 from dataclasses import dataclass, field
 from textwrap import indent
 
+from app.codegen.context import TaskCodegenContext
+from app.codegen.xcom_snippet import xcom_pull_result_body
 from app.nodes.base import ConfigField, NodeTypeSpec
 
 
@@ -13,7 +15,8 @@ class PythonScriptNode(NodeTypeSpec):
     category: str = field(default="Custom", init=False)
     icon: str = field(default="code", init=False)
     description: str = field(
-        default="Run Python code in the worker (use kwargs['ti'] for XCom).", init=False
+        default="Run arbitrary Python; upstream XCom is loaded into result when connected.",
+        init=False,
     )
     config_fields: list[ConfigField] = field(
         default_factory=lambda: [
@@ -22,8 +25,12 @@ class PythonScriptNode(NodeTypeSpec):
                 field_type="code",
                 label="Python code",
                 required=True,
-                placeholder="# Your Python code here\nresult = 'hello'",
-                description="Python code to execute. Use kwargs['ti'] for XCom.",
+                placeholder="out = result\nreturn out",
+                description=(
+                    "Python body only (no def, no imports for XCom). When an upstream task exists, "
+                    "`result` is set automatically from its XCom (JSON parsed when possible), "
+                    "same as Transform Data."
+                ),
             )
         ],
         init=False,
@@ -34,22 +41,31 @@ class PythonScriptNode(NodeTypeSpec):
             "from airflow.providers.standard.operators.python import PythonOperator",
         ]
 
-    def generate_task_code(
-        self, node_id: str, node_label: str, config: dict
-    ) -> str:
+    def generate_task_code(self, ctx: TaskCodegenContext) -> str:
         from app.codegen.naming import py_var_for_node, task_id_for_node
 
-        var = py_var_for_node(node_id)
-        tid = task_id_for_node(node_id, node_label)
-        fn_name = f"_ff_python_{node_id.replace('-', '_')}"
-        code = str(config.get("code") or "pass")
+        var = py_var_for_node(ctx.node_id)
+        tid = task_id_for_node(ctx.node_id, ctx.node_label)
+        fn_name = f"_ff_python_{ctx.node_id.replace('-', '_')}"
+        code = str(ctx.config.get("code") or "pass")
         body = indent(code.rstrip() + "\n", "    ")
+
+        if ctx.upstream_airflow_task_ids:
+            xcom = xcom_pull_result_body(ctx.upstream_airflow_task_ids[0])
+            inner = (
+                f"def {fn_name}(**kwargs):\n"
+                "    import json\n"
+                f"{xcom}"
+                f"{body}"
+            )
+        else:
+            inner = f"def {fn_name}(**kwargs):\n{body}"
+
         block = (
-            f"def {fn_name}(**kwargs):\n"
-            f"{body}\n\n"
+            f"{inner}\n"
             f"{var} = PythonOperator(\n"
             f'    task_id="{tid}",\n'
             f"    python_callable={fn_name},\n"
-            f")"
+            ")"
         )
         return block

@@ -18,7 +18,8 @@ def test_nodes_registry_shape() -> None:
     assert r.status_code == 200
     data = r.json()
     assert isinstance(data, list)
-    assert len(data) == 5
+    assert len(data) == 6
     types = {item["type"] for item in data}
     assert "http_request" in types
     assert "manual_trigger" in types
+    assert "data_transform" in types

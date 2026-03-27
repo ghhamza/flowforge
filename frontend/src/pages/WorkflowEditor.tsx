@@ -1,14 +1,24 @@
-import { ArrowLeft, Loader2 } from "lucide-react";
+import { isAxiosError } from "axios";
+import { ArrowLeft, Braces, Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 
 import { WorkflowCanvas } from "@/components/canvas/WorkflowCanvas";
 import { NodePalette } from "@/components/nodes/NodePalette";
 import { ConfigPanel } from "@/components/panels/ConfigPanel";
+import { WorkflowJsonDialog } from "@/components/workflow/WorkflowJsonDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { nodeApi, workflowApi } from "@/lib/api";
 import { useWorkflowStore } from "@/store/workflowStore";
+
+function axiosDetailMessage(e: unknown): string {
+  if (isAxiosError(e) && e.response?.data && typeof e.response.data === "object") {
+    const d = (e.response.data as { detail?: unknown }).detail;
+    if (typeof d === "string") return d;
+  }
+  return e instanceof Error ? e.message : "Request failed";
+}
 
 export function WorkflowEditor() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +26,8 @@ export function WorkflowEditor() {
   const [loading, setLoading] = useState(true);
   const [nameEdit, setNameEdit] = useState("");
   const [saving, setSaving] = useState(false);
+  const [publishError, setPublishError] = useState<string | null>(null);
+  const [jsonDialogOpen, setJsonDialogOpen] = useState(false);
 
   const workflow = useWorkflowStore((s) => s.workflow);
   const nodeTypes = useWorkflowStore((s) => s.nodeTypes);
@@ -77,6 +89,7 @@ export function WorkflowEditor() {
 
   const publish = async () => {
     if (!id) return;
+    setPublishError(null);
     try {
       const canvas = getCanvasPayload();
       await workflowApi.update(id, { canvas });
@@ -84,6 +97,7 @@ export function WorkflowEditor() {
       loadCanvasFromWorkflow(data);
     } catch (e) {
       console.error(e);
+      setPublishError(axiosDetailMessage(e));
     }
   };
 
@@ -120,24 +134,40 @@ export function WorkflowEditor() {
           onChange={(e) => setNameEdit(e.target.value)}
           onBlur={() => void saveName()}
         />
-        <div className="ml-auto flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="secondary"
-            disabled={workflow.status === "published" || saving}
-            onClick={() => void saveCanvas()}
-          >
-            {saving ? "Saving…" : "Save"}
-          </Button>
-          {workflow.status === "draft" ? (
-            <Button type="button" onClick={() => void publish()}>
-              Publish
+        <div className="ml-auto flex min-w-0 max-w-xl flex-col items-end gap-1">
+          {publishError ? (
+            <p className="max-w-full rounded border border-destructive/50 bg-destructive/10 px-2 py-1 text-right text-xs text-destructive">
+              {publishError}
+            </p>
+          ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setJsonDialogOpen(true)}
+              title="View JSON stored in the database"
+            >
+              <Braces className="mr-1.5 h-4 w-4" />
+              View JSON
             </Button>
-          ) : (
-            <Button type="button" variant="outline" onClick={() => void unpublish()}>
-              Unpublish
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={workflow.status === "published" || saving}
+              onClick={() => void saveCanvas()}
+            >
+              {saving ? "Saving…" : "Save"}
             </Button>
-          )}
+            {workflow.status === "draft" ? (
+              <Button type="button" onClick={() => void publish()}>
+                Publish
+              </Button>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => void unpublish()}>
+                Unpublish
+              </Button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -156,6 +186,10 @@ export function WorkflowEditor() {
       <div className="h-10 shrink-0 border-t bg-muted/20 text-center text-xs leading-10 text-muted-foreground">
         Execution logs — coming soon
       </div>
+
+      {id ? (
+        <WorkflowJsonDialog workflowId={id} open={jsonDialogOpen} onOpenChange={setJsonDialogOpen} />
+      ) : null}
     </div>
   );
 }

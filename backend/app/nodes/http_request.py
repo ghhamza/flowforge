@@ -3,6 +3,8 @@
 import json
 from dataclasses import dataclass, field
 
+from app.codegen.context import TaskCodegenContext
+from app.codegen.xcom_snippet import xcom_pull_result_body
 from app.nodes.base import ConfigField, NodeTypeSpec
 
 
@@ -66,24 +68,22 @@ class HttpRequestNode(NodeTypeSpec):
             "from airflow.providers.standard.operators.python import PythonOperator",
         ]
 
-    def generate_task_code(
-        self, node_id: str, node_label: str, config: dict
-    ) -> str:
+    def generate_task_code(self, ctx: TaskCodegenContext) -> str:
         from app.codegen.naming import py_var_for_node, task_id_for_node
 
-        var = py_var_for_node(node_id)
-        tid = task_id_for_node(node_id, node_label)
-        fn_name = f"_ff_http_{node_id.replace('-', '_')}"
+        var = py_var_for_node(ctx.node_id)
+        tid = task_id_for_node(ctx.node_id, ctx.node_label)
+        fn_name = f"_ff_http_{ctx.node_id.replace('-', '_')}"
 
-        url_raw = str(config.get("url") or "/")
-        method = str(config.get("method") or "GET").upper()
-        base = str(config.get("base_url") or "https://jsonplaceholder.typicode.com").rstrip(
-            "/"
-        )
-        headers = config.get("headers") or {}
+        url_raw = str(ctx.config.get("url") or "/")
+        method = str(ctx.config.get("method") or "GET").upper()
+        base = str(
+            ctx.config.get("base_url") or "https://jsonplaceholder.typicode.com"
+        ).rstrip("/")
+        headers = ctx.config.get("headers") or {}
         if not isinstance(headers, dict):
             headers = {}
-        body = config.get("body")
+        body = ctx.config.get("body")
 
         if url_raw.startswith("http://") or url_raw.startswith("https://"):
             full_url = url_raw
@@ -98,10 +98,15 @@ class HttpRequestNode(NodeTypeSpec):
         else:
             body_setup = "    body_obj = None"
 
+        xcom_block = ""
+        if ctx.upstream_airflow_task_ids:
+            xcom_block = xcom_pull_result_body(ctx.upstream_airflow_task_ids[0])
+
         return (
             f"def {fn_name}(**kwargs):\n"
             "    import json\n"
             "    import urllib.request\n"
+            f"{xcom_block}"
             f"    url = {repr(full_url)}\n"
             f"    method = {repr(method)}\n"
             f"    headers = json.loads({repr(headers_json)})\n"

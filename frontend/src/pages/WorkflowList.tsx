@@ -1,8 +1,10 @@
 import { formatDistanceToNow } from "date-fns";
 import { parseISO } from "date-fns";
+import { Braces } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
+import { WorkflowJsonDialog } from "@/components/workflow/WorkflowJsonDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -23,6 +25,7 @@ export function WorkflowList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [deleteTarget, setDeleteTarget] = useState<WorkflowListItem | null>(null);
+  const [jsonWorkflowId, setJsonWorkflowId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -116,7 +119,16 @@ export function WorkflowList() {
                 <span className="text-xs text-muted-foreground">
                   {formatDistanceToNow(parseISO(w.updated_at), { addSuffix: true })}
                 </span>
-                <div className="flex shrink-0 gap-2">
+                <div className="flex shrink-0 flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    title="View stored JSON"
+                    onClick={() => setJsonWorkflowId(w.id)}
+                  >
+                    <Braces className="h-4 w-4" />
+                  </Button>
                   {w.status === "draft" ? (
                     <Button
                       type="button"
@@ -174,6 +186,16 @@ export function WorkflowList() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {jsonWorkflowId ? (
+        <WorkflowJsonDialog
+          workflowId={jsonWorkflowId}
+          open
+          onOpenChange={(o) => {
+            if (!o) setJsonWorkflowId(null);
+          }}
+        />
+      ) : null}
 
       <Dialog open={!!deleteTarget} onOpenChange={() => setDeleteTarget(null)}>
         <DialogContent>

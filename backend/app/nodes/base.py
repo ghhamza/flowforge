@@ -3,6 +3,8 @@
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 
+from app.codegen.context import TaskCodegenContext
+
 
 @dataclass
 class ConfigField:
@@ -35,8 +37,6 @@ class NodeTypeSpec(ABC):
         ...
 
     @abstractmethod
-    def generate_task_code(
-        self, node_id: str, node_label: str, config: dict
-    ) -> str:
+    def generate_task_code(self, ctx: TaskCodegenContext) -> str:
         """Return Python code string that creates the Airflow task."""
         ...

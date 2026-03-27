@@ -1,8 +1,17 @@
 import { useEffect, useMemo } from "react";
-import { Clock, Code, GitBranch, Globe, Play, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Clock,
+  Code,
+  GitBranch,
+  Globe,
+  Play,
+  type LucideIcon,
+} from "lucide-react";
 
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DynamicField } from "@/components/panels/DynamicField";
+import { airflowTaskIdForNode } from "@/lib/airflowNames";
 import { useWorkflowStore } from "@/store/workflowStore";
 
 const ICONS: Record<string, LucideIcon> = {
@@ -11,6 +20,7 @@ const ICONS: Record<string, LucideIcon> = {
   globe: Globe,
   code: Code,
   "git-branch": GitBranch,
+  "arrow-left-right": ArrowLeftRight,
 };
 
 export function ConfigPanel() {
@@ -28,6 +38,20 @@ export function ConfigPanel() {
     () => nodeTypes.find((t) => t.type === node?.data.kind),
     [nodeTypes, node?.data.kind],
   );
+
+  const edges = useWorkflowStore((s) => s.edges);
+  const branchDownstreamTaskIds = useMemo(() => {
+    if (!node || node.data.kind !== "condition_branch") return [];
+    const targetIds = edges
+      .filter((e) => e.source === node.id)
+      .map((e) => e.target);
+    const sorted = [...new Set(targetIds)].sort();
+    return sorted.map((tid) => {
+      const n = nodes.find((x) => x.id === tid);
+      if (!n) return null;
+      return airflowTaskIdForNode(n.data.label, n.id);
+    }).filter((x): x is string => x !== null);
+  }, [node, edges, nodes]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -55,6 +79,21 @@ export function ConfigPanel() {
           <span className="text-sm font-semibold">{spec.label}</span>
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{spec.description}</p>
+        {branchDownstreamTaskIds.length > 0 ? (
+          <div className="mt-2 rounded border border-border bg-muted/40 px-2 py-1.5 text-xs">
+            <p className="font-medium text-foreground">Use these in return &apos;…&apos;:</p>
+            <ul className="mt-1 space-y-0.5 font-mono text-[11px] text-muted-foreground">
+              {branchDownstreamTaskIds.map((tid) => (
+                <li key={tid}>{tid}</li>
+              ))}
+            </ul>
+          </div>
+        ) : node.data.kind === "condition_branch" ? (
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400">
+            Connect outgoing edges from this branch to downstream tasks — then allowed task ids
+            appear here.
+          </p>
+        ) : null}
       </div>
       <ScrollArea className="flex-1">
         <div className="space-y-4 p-3">

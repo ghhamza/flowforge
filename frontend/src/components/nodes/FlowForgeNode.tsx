@@ -1,6 +1,14 @@
 import { memo } from "react";
 import { Handle, Position, type NodeProps } from "@xyflow/react";
-import { Clock, Code, GitBranch, Globe, Play, type LucideIcon } from "lucide-react";
+import {
+  ArrowLeftRight,
+  Clock,
+  Code,
+  GitBranch,
+  Globe,
+  Play,
+  type LucideIcon,
+} from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { FlowForgeRfNode } from "@/store/workflowStore";
@@ -12,12 +20,14 @@ const ICONS: Record<string, LucideIcon> = {
   globe: Globe,
   code: Code,
   "git-branch": GitBranch,
+  "arrow-left-right": ArrowLeftRight,
 };
 
 const CATEGORY_BAR: Record<string, string> = {
   Triggers: "bg-emerald-600/90",
   HTTP: "bg-sky-600/90",
   Logic: "bg-violet-600/90",
+  Data: "bg-orange-600/90",
   Custom: "bg-amber-600/90",
 };
 

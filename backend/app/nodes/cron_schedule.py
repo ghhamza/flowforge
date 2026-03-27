@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from app.codegen.context import TaskCodegenContext
 from app.nodes.base import ConfigField, NodeTypeSpec
 
 
@@ -31,7 +32,5 @@ class CronScheduleNode(NodeTypeSpec):
     def generate_imports(self) -> list[str]:
         return []
 
-    def generate_task_code(
-        self, node_id: str, node_label: str, config: dict
-    ) -> str:
+    def generate_task_code(self, ctx: TaskCodegenContext) -> str:
         return ""

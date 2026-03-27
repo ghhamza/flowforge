@@ -4,16 +4,80 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 
+from app.codegen.context import TaskCodegenContext
 from app.codegen.exceptions import CodegenValidationError
+from app.codegen.graph_resolution import (
+    downstream_airflow_task_ids_for_branch,
+    optional_upstream_task_id_tuple,
+    primary_upstream_task_id_for_xcom,
+)
 from app.codegen.naming import py_var_for_node
 from app.codegen.renderer import render_dag_file
 from app.nodes.registry import get_node_type
 
 TRIGGER_TYPES = frozenset({"manual_trigger", "cron_schedule"})
 TASK_TYPES = frozenset(
-    {"manual_trigger", "http_request", "python_script", "condition_branch"}
+    {
+        "manual_trigger",
+        "http_request",
+        "data_transform",
+        "python_script",
+        "condition_branch",
+    }
 )
 NON_TASK_TYPES = frozenset({"cron_schedule"})
+
+
+def _build_task_context(
+    n: dict,
+    edges: list[tuple[str, str]],
+    node_by_id: dict[str, dict],
+) -> TaskCodegenContext:
+    nid = n["id"]
+    label = n.get("label") or n["type"]
+    cfg = n.get("config") or {}
+    if not isinstance(cfg, dict):
+        cfg = {}
+
+    ntype = n["type"]
+    if ntype == "condition_branch":
+        up = (primary_upstream_task_id_for_xcom(nid, edges, node_by_id),)
+        down = downstream_airflow_task_ids_for_branch(nid, edges, node_by_id)
+        return TaskCodegenContext(
+            node_id=nid,
+            node_label=label,
+            config=cfg,
+            upstream_airflow_task_ids=up,
+            downstream_airflow_task_ids=down,
+        )
+
+    if ntype == "data_transform":
+        up = (primary_upstream_task_id_for_xcom(nid, edges, node_by_id),)
+        return TaskCodegenContext(
+            node_id=nid,
+            node_label=label,
+            config=cfg,
+            upstream_airflow_task_ids=up,
+            downstream_airflow_task_ids=(),
+        )
+
+    if ntype in ("python_script", "http_request"):
+        up = optional_upstream_task_id_tuple(nid, edges, node_by_id)
+        return TaskCodegenContext(
+            node_id=nid,
+            node_label=label,
+            config=cfg,
+            upstream_airflow_task_ids=up,
+            downstream_airflow_task_ids=(),
+        )
+
+    return TaskCodegenContext(
+        node_id=nid,
+        node_label=label,
+        config=cfg,
+        upstream_airflow_task_ids=(),
+        downstream_airflow_task_ids=(),
+    )
 
 
 def _has_cycle(node_ids: set[str], edges: list[tuple[str, str]]) -> bool:
@@ -138,12 +202,8 @@ def generate_dag(
         if spec is None:
             raise CodegenValidationError(f"Unknown node type: {n['type']}")
         imports.extend(spec.generate_imports())
-        cfg = n.get("config") or {}
-        if isinstance(cfg, dict):
-            cfg_dict = cfg
-        else:
-            cfg_dict = {}
-        code = spec.generate_task_code(n["id"], n.get("label") or n["type"], cfg_dict)
+        ctx = _build_task_context(n, edges, node_by_id)
+        code = spec.generate_task_code(ctx)
         task_blocks.append(code)
 
     # Dependencies (skip edges whose source is cron_schedule — targets are DAG roots)

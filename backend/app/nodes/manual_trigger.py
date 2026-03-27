@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from app.codegen.context import TaskCodegenContext
 from app.nodes.base import ConfigField, NodeTypeSpec
 
 
@@ -19,13 +20,11 @@ class ManualTriggerNode(NodeTypeSpec):
             "from airflow.providers.standard.operators.empty import EmptyOperator",
         ]
 
-    def generate_task_code(
-        self, node_id: str, node_label: str, config: dict
-    ) -> str:
+    def generate_task_code(self, ctx: TaskCodegenContext) -> str:
         from app.codegen.naming import py_var_for_node, task_id_for_node
 
-        var = py_var_for_node(node_id)
-        tid = task_id_for_node(node_id, node_label)
+        var = py_var_for_node(ctx.node_id)
+        tid = task_id_for_node(ctx.node_id, ctx.node_label)
         return (
             f"{var} = EmptyOperator(\n"
             f'    task_id="{tid}",\n'

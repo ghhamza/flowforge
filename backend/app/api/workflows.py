@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 import uuid
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from app.schemas.workflow import (
     WorkflowResponse,
     WorkflowUpdate,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/workflows", tags=["workflows"])
 
@@ -153,6 +156,7 @@ async def publish_workflow(
             schedule=w.schedule,
         )
     except CodegenValidationError as e:
+        logger.warning("Publish blocked: codegen validation failed: %s", e)
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     Path(settings.DAGS_DIR).mkdir(parents=True, exist_ok=True)
