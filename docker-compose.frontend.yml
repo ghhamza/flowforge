@@ -1,0 +1,23 @@
+# FlowForge — Frontend (Vite dev server).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.frontend.yml up -d
+#
+# Or skip Docker entirely and run locally:
+#   cd frontend && pnpm dev
+#
+# The Vite dev server proxies /api to the backend (localhost:8000).
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      VITE_API_BASE_URL: http://localhost:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend/src:/app/src
+    command: ["pnpm", "run", "dev", "--", "--host", "0.0.0.0", "--port", "5173"]

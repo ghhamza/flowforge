@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Node
+node_modules/
+dist/
+frontend/package-lock.json
+*.tsbuildinfo
+.npm/
+.pnpm-store/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Docker
+*.log
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
+
+# Airflow
+logs/
+airflow/logs/
+airflow/dags/
+
+# Misc
+coverage/
+htmlcov/
+logs/
